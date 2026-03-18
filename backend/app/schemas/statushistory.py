@@ -15,3 +15,10 @@ class StatusHistoryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class StatusHistoryCreate(BaseModel):
+    ticket_id: int
+    changed_by: int
+    old_status: Optional[TicketStatus] = Field(None)
+    new_status: TicketStatus
