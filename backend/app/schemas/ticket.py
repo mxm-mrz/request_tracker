@@ -43,7 +43,6 @@ class TicketUpdateByUser(BaseModel):
 class TicketUpdateByAdmin(TicketUpdateByUser):
     status: Optional[TicketStatus] = Field(None)
     priority: Optional[TicketPriority] = Field(None)
-    assignee_id: Optional[int] = Field(None)
 
 
 class TicketStatusUpdate(BaseModel):
@@ -62,13 +61,10 @@ class TicketQueryParams(BaseModel):
     page: Optional[int] = Field(1)
     page_size: Optional[int] = Field(10)
     search: Optional[str] = Field(None)
-    id: Optional[int] = Field(None)
     status: Optional[TicketStatus] = Field(None)
     priority: Optional[TicketPriority] = Field(None)
     author_id: Optional[int] = Field(None)
     assignee_id: Optional[int] = Field(None)
-    created_at: Optional[datetime.datetime] = Field(None)
-    updated_at: Optional[datetime.datetime] = Field(None)
     sort_by: Optional[Literal[
         "created_at_asc",
         "created_at_desc",

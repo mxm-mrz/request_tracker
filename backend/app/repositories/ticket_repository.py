@@ -1,6 +1,6 @@
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Any, Optional
 from ..models.ticket import Ticket
 from ..schemas.ticket import TicketCreate, TicketQueryParams, TicketUpdateByAdmin, TicketUpdateByUser
 
@@ -8,6 +8,12 @@ from ..schemas.ticket import TicketCreate, TicketQueryParams, TicketUpdateByAdmi
 class TicketRepository:
     def __init__(self, db: Session):
         self.db = db
+
+    def save_ticket(self, new_ticket: Ticket) -> Ticket:
+        self.db.add(new_ticket)
+        self.db.commit()
+        self.db.refresh(new_ticket)
+        return new_ticket
 
     def create(self, ticket_data: TicketCreate, author_id: int) -> Ticket:
         db_ticket = Ticket(**ticket_data.model_dump(), author_id=author_id)
@@ -19,7 +25,7 @@ class TicketRepository:
     def get_ticket_by_id(self, ticket_id: int) -> Optional[Ticket]:
         return self.db.query(Ticket).filter(Ticket.id == ticket_id).first()
 
-    def get_ticket_list(self, params: TicketQueryParams) -> dict[str, any]:
+    def get_ticket_list(self, params: TicketQueryParams) -> dict[str, Any]:
         query = self.db.query(Ticket)
 
         if params.status is not None:
@@ -61,7 +67,7 @@ class TicketRepository:
                   'page': params.page, 'page_size': params.page_size}
         return result
 
-    def update_ticket(self, ticket_id: int, data_for_update: TicketUpdateByUser | TicketUpdateByAdmin) -> Optional[Ticket]:
+    def update(self, ticket_id: int, data_for_update: TicketUpdateByUser | TicketUpdateByAdmin) -> Optional[Ticket]:
         db_ticket = self.db.query(Ticket).filter(
             Ticket.id == ticket_id).first()
         if not db_ticket:

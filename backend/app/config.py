@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 class Settings(BaseSettings):
     app_name: str = 'Request Tracker'
-    debug: bool = True
+    app_debug: bool = True
     database_url: str = f"sqlite:///{BASE_DIR / 'backend' / 'tracker.db'}"
     model_config = SettingsConfigDict(env_file=BASE_DIR / '.env')
     cors_origins: list = [
@@ -15,6 +15,9 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
     ]
+    secret_key: str
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
 
 
 settings = Settings()
