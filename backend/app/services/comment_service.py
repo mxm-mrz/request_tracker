@@ -6,6 +6,7 @@ from app.repositories.ticket_repository import TicketRepository
 from app.schemas.comment import CommentCreate
 from app.models.user import User, UserRole
 from app.models.comment import Comment
+from app.models.ticket import Ticket
 
 
 class CommentService:
@@ -13,15 +14,17 @@ class CommentService:
         self.comment_repository = CommentRepository(db)
         self.ticket_repository = TicketRepository(db)
 
-    def create(self, comment_data: CommentCreate, current_user: User):
-        ticket = self.ticket_repository.get_ticket_by_id(
-            comment_data.ticket_id)
+    def check_ticket(self, ticket: Ticket):
         if not ticket:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail='Ticket not found'
             )
+        return ticket
 
+    def create(self, ticket_id: int, comment_data: CommentCreate, current_user: User):
+        ticket = self.check_ticket(self.ticket_repository.get_ticket_by_id(
+            ticket_id))
         if current_user.role != UserRole.ADMIN and ticket.author_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -29,16 +32,12 @@ class CommentService:
             )
 
         new_comment = self.comment_repository.create(
-            comment_data, current_user.id)
+            ticket_id, comment_data, current_user.id)
         return new_comment
 
     def get_comment_by_ticket(self, ticket_id: int, current_user: User) -> list[Comment]:
-        ticket = self.ticket_repository.get_ticket_by_id(ticket_id)
-        if not ticket:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail='Ticket not found'
-            )
+        ticket = self.check_ticket(self.ticket_repository.get_ticket_by_id(
+            ticket_id))
         if current_user.id != ticket.author_id and current_user.role != UserRole.ADMIN:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

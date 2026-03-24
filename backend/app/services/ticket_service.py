@@ -19,13 +19,23 @@ class TicketService:
         self.user_repository = UserRepository(db)
         self.statushistory_repository = StatusHistoryRepository(db)
 
-    def create(self, ticket_data: TicketCreate, user_id: int) -> Ticket:
-        if not self.user_repository.get_user_by_id(user_id):
+    def check_ticket(self, found_ticket: Ticket | None) -> Ticket:
+        if not found_ticket:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'User ID {user_id} not found'
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='Ticket not found'
             )
+        return found_ticket
 
+    def check_by_admin(self, current_user: User) -> User:
+        if current_user.role != UserRole.ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='Access denied'
+            )
+        return current_user
+
+    def create(self, ticket_data: TicketCreate, user_id: int) -> Ticket:
         new_ticket = self.ticket_repository.create(ticket_data, user_id)
         return new_ticket
 
@@ -36,12 +46,9 @@ class TicketService:
         return new_list
 
     def get_ticket_by_id(self, ticket_id: int, current_user: User) -> Ticket:
-        found_ticket = self.ticket_repository.get_ticket_by_id(ticket_id)
-        if not found_ticket:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail='Ticket not found'
-            )
+        found_ticket = self.check_ticket(
+            self.ticket_repository.get_ticket_by_id(ticket_id))
+
         if current_user.role != UserRole.ADMIN and found_ticket.author_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -50,17 +57,9 @@ class TicketService:
         return found_ticket
 
     def appoint_an_executor(self, ticket_id: int, executor: User, current_user: User) -> Ticket:
-        found_ticket = self.ticket_repository.get_ticket_by_id(ticket_id)
-        if not found_ticket:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail='Ticket not found'
-            )
-        if current_user.role != UserRole.ADMIN:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail='Access denied'
-            )
+        found_ticket = self.check_ticket(
+            self.ticket_repository.get_ticket_by_id(ticket_id))
+        self.check_by_admin(current_user)
         if executor.id == found_ticket.assignee_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -77,23 +76,16 @@ class TicketService:
         return saved_ticket
 
     def update_status(self, ticket_id: int, new_status: TicketStatus, current_user: User) -> Ticket:
-        found_ticket = self.ticket_repository.get_ticket_by_id(ticket_id)
-        if not found_ticket:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail='Ticket not found'
-            )
+        found_ticket = self.check_ticket(
+            self.ticket_repository.get_ticket_by_id(ticket_id))
         old_status = found_ticket.status
         if new_status == old_status:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f'Status should be new'
             )
-        if current_user.role != UserRole.ADMIN:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail='Access denied'
-            )
+
+        self.check_by_admin(current_user)
 
         if found_ticket.status == TicketStatus.NEW:
             if new_status not in [TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED, TicketStatus.CLOSED]:
@@ -144,12 +136,8 @@ class TicketService:
         return saved_ticket
 
     def update(self, ticket_id: int, data_for_update: TicketUpdateByUser | TicketUpdateByAdmin, current_user: User) -> Ticket:
-        found_ticket = self.ticket_repository.get_ticket_by_id(ticket_id)
-        if not found_ticket:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail='Ticket not found'
-            )
+        found_ticket = self.check_ticket(
+            self.ticket_repository.get_ticket_by_id(ticket_id))
 
         if current_user.role != UserRole.ADMIN and isinstance(data_for_update, TicketUpdateByAdmin):
             raise HTTPException(
@@ -185,32 +173,17 @@ class TicketService:
         return updated_ticket
 
     def update_priority(self, ticket_id: int, new_priority: TicketPriority, current_user: User) -> Ticket:
-        found_ticket = self.ticket_repository.get_ticket_by_id(ticket_id)
-        if not found_ticket:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail='Ticket not found'
-            )
-        if current_user.role != UserRole.ADMIN:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail='Access denied'
-            )
+        found_ticket = self.check_ticket(
+            self.ticket_repository.get_ticket_by_id(ticket_id))
+
+        self.check_by_admin(current_user)
 
         found_ticket.priority = new_priority
         saved_ticket = self.ticket_repository.save_ticket(found_ticket)
         return saved_ticket
 
     def check_author(self, ticket_id: int, current_user: User) -> int:
-        found_ticket = self.ticket_repository.get_ticket_by_id(ticket_id)
-        if not found_ticket:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail='Ticket not found'
-            )
-        if current_user.role != UserRole.ADMIN:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail='Access denied'
-            )
+        found_ticket = self.check_ticket(
+            self.ticket_repository.get_ticket_by_id(ticket_id))
+        self.check_by_admin(current_user)
         return found_ticket.author_id

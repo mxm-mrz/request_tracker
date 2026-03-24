@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session
 from typing import Optional
+
+from app.utils.hashing import get_password_hash
 from ..models.user import User, UserRole
 from ..schemas.user import UserCreate
-from ..security import get_password_hash
 
 
 class UserRepository:

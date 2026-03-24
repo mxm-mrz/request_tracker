@@ -7,7 +7,8 @@ from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate, UserRead
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse
-from app.security import create_access_token, verify_password
+from app.security import create_access_token
+from app.utils.hashing import verify_password
 
 
 class AuthService:

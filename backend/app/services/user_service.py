@@ -18,6 +18,7 @@ class UserService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f'Profile with id {user_id} not found'
             )
+
         return profile
 
     def get_admin_list(self) -> list[User]:

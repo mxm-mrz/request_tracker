@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class CommentCreate(BaseModel):
-    ticket_id: int
     content: str = Field(..., min_length=1, max_length=1000)
 
     @field_validator('content')
