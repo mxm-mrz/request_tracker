@@ -45,5 +45,5 @@ class AuthService:
                 detail='User or password is wrong'
             )
 
-        access_token = create_access_token({'sub': user.id})
+        access_token = create_access_token({'sub': str(user.id)})
         return TokenResponse(access_token=access_token, token_type="bearer")

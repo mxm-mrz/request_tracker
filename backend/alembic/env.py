@@ -8,6 +8,7 @@ from app.database import Base
 from app.config import settings
 
 from alembic import context
+from app.models import Comment, User, UserRole, StatusHistory, Ticket, TicketPriority, TicketStatus
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

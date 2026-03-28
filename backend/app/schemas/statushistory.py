@@ -1,7 +1,7 @@
 import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.ticket import TicketStatus
 
@@ -13,8 +13,7 @@ class StatusHistoryResponse(BaseModel):
     new_status: TicketStatus
     changed_at: Optional[datetime.datetime] = Field(None)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StatusHistoryCreate(BaseModel):

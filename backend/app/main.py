@@ -5,7 +5,7 @@ from .routers import user_router, ticket_router, comment_router, auth_router, st
 
 app = FastAPI(
     title=settings.app_name,
-    debug=settings.debug,
+    debug=settings.app_debug,
 )
 
 app.add_middleware(

@@ -1,7 +1,7 @@
 import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.ticket import TicketPriority, TicketStatus
 from app.schemas.comment import CommentResponse
@@ -87,8 +87,7 @@ class TicketResponse(TicketBase):
     comments: list[CommentResponse] = Field(default_factory=list)
     statushistory: list[StatusHistoryResponse] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TicketListResponse(BaseModel):
