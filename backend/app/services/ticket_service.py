@@ -4,13 +4,15 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.repositories.ticket_repository import TicketRepository
-from app.schemas.ticket import TicketCreate, TicketQueryParams, TicketUpdateByAdmin, TicketUpdateByUser
+from app.schemas.ticket import TicketCreate, TicketQueryParams, TicketResponse, TicketUpdateByAdmin, TicketUpdateByUser
 from app.models.ticket import Ticket, TicketPriority, TicketStatus
 from app.repositories.user_repository import UserRepository
 from app.models.user import User, UserRole
 from app.repositories.statushistory_repository import StatusHistoryRepository
 from app.schemas.statushistory import StatusHistoryCreate
 from app.time_utils import utc_now
+from app.services.ticket_cache import TicketCacheService
+from app.services.statushistory_cache import StatusHistoryCacheService
 
 
 class TicketService:
@@ -18,6 +20,8 @@ class TicketService:
         self.ticket_repository = TicketRepository(db)
         self.user_repository = UserRepository(db)
         self.statushistory_repository = StatusHistoryRepository(db)
+        self.cache = TicketCacheService()
+        self.cache_statushistory = StatusHistoryCacheService()
 
     def check_ticket(self, found_ticket: Ticket | None) -> Ticket:
         if not found_ticket:
@@ -37,24 +41,56 @@ class TicketService:
 
     def create(self, ticket_data: TicketCreate, user_id: int) -> Ticket:
         new_ticket = self.ticket_repository.create(ticket_data, user_id)
+        self.cache.invalidate_ticket_list()
         return new_ticket
 
     def get_ticket_list(self, params: TicketQueryParams, current_user: User) -> dict[str, Any]:
         if current_user.role != UserRole.ADMIN:
             params.author_id = current_user.id
-        new_list = self.ticket_repository.get_ticket_list(params)
-        return new_list
 
-    def get_ticket_by_id(self, ticket_id: int, current_user: User) -> Ticket:
-        found_ticket = self.check_ticket(
-            self.ticket_repository.get_ticket_by_id(ticket_id))
+        cached_list = self.cache.get_ticket_list(
+            current_user.id, params.model_dump_json())
+        if cached_list:
+            return cached_list
+        else:
+            db_tickets = self.ticket_repository.get_ticket_list(params)
+            serialized_tickets = [TicketResponse.model_validate(
+                t).model_dump(mode='json') for t in db_tickets['tickets']]
 
-        if current_user.role != UserRole.ADMIN and found_ticket.author_id != current_user.id:
+            final_data = {
+                'tickets': serialized_tickets,
+                'total': db_tickets['total'],
+                'page': db_tickets['page'],
+                'page_size': db_tickets['page_size']
+            }
+
+            self.cache.set_ticket_list(
+                current_user.id, params.model_dump_json(), final_data)
+
+        return final_data
+
+    def get_ticket_by_id(self, ticket_id: int, current_user: User) -> dict:
+        ticket_data = self.cache.get_ticket(ticket_id)
+
+        if ticket_data:
+            author_id = ticket_data.get('author_id')
+        else:
+            found_ticket = self.check_ticket(
+                self.ticket_repository.get_ticket_by_id(ticket_id)
+            )
+            author_id = found_ticket.author_id
+
+            ticket_data = TicketResponse.model_validate(
+                found_ticket).model_dump(mode='json')
+
+            self.cache.set_ticket(ticket_id, ticket_data)
+
+        if current_user.role != UserRole.ADMIN and author_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail='Access denied'
             )
-        return found_ticket
+        return ticket_data
 
     def appoint_an_executor(self, ticket_id: int, executor: User, current_user: User) -> Ticket:
         found_ticket = self.check_ticket(
@@ -73,6 +109,8 @@ class TicketService:
         found_ticket.assignee_id = executor.id
         found_ticket.updated_at = utc_now()
         saved_ticket = self.ticket_repository.save_ticket(found_ticket)
+        self.cache.invalidate_ticket_list()
+        self.cache.delete_ticket(ticket_id)
         return saved_ticket
 
     def update_status(self, ticket_id: int, new_status: TicketStatus, current_user: User) -> Ticket:
@@ -133,6 +171,9 @@ class TicketService:
         found_ticket.status = new_status
         found_ticket.updated_at = utc_now()
         saved_ticket = self.ticket_repository.save_ticket(found_ticket)
+        self.cache.invalidate_ticket_list()
+        self.cache.delete_ticket(ticket_id)
+        self.cache_statushistory.delete_status(ticket_id)
         return saved_ticket
 
     def update(self, ticket_id: int, data_for_update: TicketUpdateByUser | TicketUpdateByAdmin, current_user: User) -> Ticket:
@@ -169,7 +210,8 @@ class TicketService:
 
         updated_ticket = self.ticket_repository.update(
             ticket_id, data_for_update)
-
+        self.cache.invalidate_ticket_list()
+        self.cache.delete_ticket(ticket_id)
         return updated_ticket
 
     def update_priority(self, ticket_id: int, new_priority: TicketPriority, current_user: User) -> Ticket:
@@ -179,7 +221,10 @@ class TicketService:
         self.check_by_admin(current_user)
 
         found_ticket.priority = new_priority
+        found_ticket.updated_at = utc_now()
         saved_ticket = self.ticket_repository.save_ticket(found_ticket)
+        self.cache.invalidate_ticket_list()
+        self.cache.delete_ticket(ticket_id)
         return saved_ticket
 
     def check_author(self, ticket_id: int, current_user: User) -> int:

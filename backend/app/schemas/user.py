@@ -1,6 +1,6 @@
 import re
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.user import UserRole
 
@@ -33,3 +33,5 @@ class UserRead(UserBase):
     id: int
     role: UserRole
     is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .routers import user_router, ticket_router, comment_router, auth_router, statushistory_router
+from . import redis_client
 
 app = FastAPI(
     title=settings.app_name,
