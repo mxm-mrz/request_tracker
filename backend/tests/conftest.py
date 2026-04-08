@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.main import app
 from app.database import Base, get_db
+from app.redis_client import redis_client
 
 # Строка подключения для SQLite в оперативной памяти
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -43,3 +44,22 @@ def client(db_session):
         yield test_client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_rate_limit_keys():
+    try:
+        keys_to_delete = list(redis_client.scan_iter(match='rate_limit:*'))
+        if keys_to_delete:
+            redis_client.delete(*keys_to_delete)
+    except Exception:
+        pass
+
+    yield
+
+    try:
+        keys_to_delete = list(redis_client.scan_iter(match='rate_limit:*'))
+        if keys_to_delete:
+            redis_client.delete(*keys_to_delete)
+    except Exception:
+        pass

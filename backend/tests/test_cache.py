@@ -37,13 +37,28 @@ class FakeRedis:
                 yield key
 
 
+class BrokenRedis:
+    def get(self, name: str):
+        raise RuntimeError("redis unavailable")
+
+    def setex(self, name: str, time: int, value: str):
+        raise RuntimeError("redis unavailable")
+
+    def delete(self, *names: str):
+        raise RuntimeError("redis unavailable")
+
+    def scan_iter(self, match: str | None = None):
+        raise RuntimeError("redis unavailable")
+
+
 def test_ticket_cache_roundtrip_and_invalidate_list(monkeypatch):
     fake_redis = FakeRedis()
     monkeypatch.setattr(ticket_cache_module, "redis_client", fake_redis)
     service = TicketCacheService()
 
     ticket_data = {"id": 1, "title": "Broken export"}
-    ticket_list = {"tickets": [ticket_data], "total": 1, "page": 1, "page_size": 10}
+    ticket_list = {"tickets": [ticket_data],
+                   "total": 1, "page": 1, "page_size": 10}
     params_json = '{"page":1,"page_size":10}'
 
     service.set_ticket(1, ticket_data)
@@ -161,3 +176,71 @@ def test_user_cache_profile_roundtrip(monkeypatch):
     assert cache.get_profile(11) == profile_data
     assert fake_redis.setex_calls[0][0] == "user:11"
     assert fake_redis.setex_calls[0][1] == 60
+
+
+def test_ticket_cache_degrades_gracefully_when_redis_is_unavailable(monkeypatch):
+    monkeypatch.setattr(ticket_cache_module, "redis_client", BrokenRedis())
+    service = TicketCacheService()
+
+    assert service.get_ticket(1) is None
+    assert service.get_ticket_list(5, '{"page":1}') is None
+
+    service.set_ticket(1, {"id": 1, "title": "Broken export"})
+    service.set_ticket_list(
+        5, '{"page":1}', {"tickets": [], "total": 0, "page": 1, "page_size": 10})
+    service.invalidate_ticket_list()
+    service.delete_ticket(1)
+
+
+def test_user_service_returns_admins_from_repository_when_cache_is_unavailable(monkeypatch):
+    monkeypatch.setattr(user_cache_module, "redis_client", BrokenRedis())
+
+    service = UserService(db=None)
+
+    admin_1 = User(
+        id=1,
+        email="admin1@example.com",
+        username="admin1",
+        hashed_password="hashed",
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+    admin_2 = User(
+        id=2,
+        email="admin2@example.com",
+        username="admin2",
+        hashed_password="hashed",
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+
+    calls = {"count": 0}
+
+    def fake_get_admin_list():
+        calls["count"] += 1
+        return [admin_1, admin_2]
+
+    service.repository.get_admin_list = fake_get_admin_list
+
+    result = service.get_admin_list()
+
+    assert calls["count"] == 1
+    assert [user["username"] for user in result] == ["admin1", "admin2"]
+
+
+def test_comment_and_history_cache_degrade_gracefully_when_redis_is_unavailable(monkeypatch):
+    monkeypatch.setattr(comment_cache_module, "redis_client", BrokenRedis())
+    monkeypatch.setattr(statushistory_cache_module,
+                        "redis_client", BrokenRedis())
+
+    comment_cache = CommentCacheService()
+    history_cache = StatusHistoryCacheService()
+
+    assert comment_cache.get_comments(12) is None
+    comment_cache.set_comments(12, [{"id": 1, "content": "First comment"}])
+    comment_cache.delete_comments(12)
+
+    assert history_cache.get_status(33) is None
+    history_cache.set_status(
+        33, [{"old_status": "new", "new_status": "in_progress"}])
+    history_cache.delete_status(33)
