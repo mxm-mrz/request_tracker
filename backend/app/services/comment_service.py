@@ -39,7 +39,7 @@ class CommentService:
         self.cache.delete_comments(ticket_id)
         event_publisher = EventPublisher()
         event_publisher.publish_ticket_event(
-            "COMMENT_CREATED", ticket_id, current_user.id)
+            "CREATED_COMMENT", ticket_id, current_user.id)
         return new_comment
 
     def get_comment_by_ticket(self, ticket_id: int, current_user: User) -> list[Comment]:
