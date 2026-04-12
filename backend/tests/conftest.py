@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
 
+import app.services.blacklist_service as blacklist_service_module
 from app.main import app
 from app.database import Base, get_db
 from app.redis_client import redis_client
@@ -18,6 +19,30 @@ engine = create_engine(
 )
 TestingSessionLocal = sessionmaker(
     autocommit=False, autoflush=False, bind=engine)
+
+
+class FakeSecurityRedis:
+    def __init__(self):
+        self.store: dict[str, object] = {}
+
+    def get(self, name: str):
+        return self.store.get(name)
+
+    def setex(self, name: str, time: int, value):
+        self.store[name] = value
+
+    def delete(self, *names: str):
+        deleted = 0
+        for name in names:
+            if name in self.store:
+                del self.store[name]
+                deleted += 1
+        return deleted
+
+    def scan_iter(self, match: str | None = None):
+        for key in list(self.store.keys()):
+            if match is None or key.startswith(match.rstrip('*')):
+                yield key
 
 
 @pytest.fixture()
@@ -44,6 +69,13 @@ def client(db_session):
         yield test_client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def fake_blacklist_redis(monkeypatch):
+    fake_redis = FakeSecurityRedis()
+    monkeypatch.setattr(blacklist_service_module, 'redis_client', fake_redis)
+    return fake_redis
 
 
 @pytest.fixture(autouse=True)

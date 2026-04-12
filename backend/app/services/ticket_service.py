@@ -13,6 +13,7 @@ from app.schemas.statushistory import StatusHistoryCreate
 from app.time_utils import utc_now
 from app.services.ticket_cache import TicketCacheService
 from app.services.statushistory_cache import StatusHistoryCacheService
+from app.services.event_publisher import EventPublisher
 
 
 class TicketService:
@@ -42,6 +43,9 @@ class TicketService:
     def create(self, ticket_data: TicketCreate, user_id: int) -> Ticket:
         new_ticket = self.ticket_repository.create(ticket_data, user_id)
         self.cache.invalidate_ticket_list()
+        event_publisher = EventPublisher()
+        event_publisher.publish_ticket_event(
+            "TICKET_CREATED", new_ticket.id, user_id)
         return new_ticket
 
     def get_ticket_list(self, params: TicketQueryParams, current_user: User) -> dict[str, Any]:
@@ -111,6 +115,9 @@ class TicketService:
         saved_ticket = self.ticket_repository.save_ticket(found_ticket)
         self.cache.invalidate_ticket_list()
         self.cache.delete_ticket(ticket_id)
+        event_publisher = EventPublisher()
+        event_publisher.publish_ticket_event(
+            "EXECUTOR_WAS_APPOINTED", ticket_id, current_user.id)
         return saved_ticket
 
     def update_status(self, ticket_id: int, new_status: TicketStatus, current_user: User) -> Ticket:
@@ -122,7 +129,6 @@ class TicketService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f'Status should be new'
             )
-
         self.check_by_admin(current_user)
 
         if found_ticket.status == TicketStatus.NEW:
@@ -174,6 +180,9 @@ class TicketService:
         self.cache.invalidate_ticket_list()
         self.cache.delete_ticket(ticket_id)
         self.cache_statushistory.delete_status(ticket_id)
+        event_publisher = EventPublisher()
+        event_publisher.publish_ticket_event(
+            "CHANGE_STATUS", ticket_id, current_user.id)
         return saved_ticket
 
     def update(self, ticket_id: int, data_for_update: TicketUpdateByUser | TicketUpdateByAdmin, current_user: User) -> Ticket:

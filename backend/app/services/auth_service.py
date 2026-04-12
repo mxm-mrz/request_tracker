@@ -1,14 +1,15 @@
-from typing import Optional
+from time import time
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.repositories.user_repository import UserRepository
-from app.schemas.user import UserCreate, UserRead
+from app.schemas.user import UserCreate
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse
-from app.security import create_access_token
+from app.security import create_access_token, decode_access_token
 from app.utils.hashing import verify_password
+from app.services.blacklist_service import TokenBlacklistService
 
 
 class AuthService:
@@ -47,3 +48,16 @@ class AuthService:
 
         access_token = create_access_token({'sub': str(user.id)})
         return TokenResponse(access_token=access_token, token_type="bearer")
+
+    def logout(self, token: str):
+        payload = decode_access_token(token)
+        jti = payload.get('jti')
+        exp = payload.get('exp')
+
+        current_time = int(time())
+        expire_time = exp - current_time
+
+        cache_service = TokenBlacklistService()
+
+        if expire_time > 0:
+            cache_service.add_to_blacklist(jti, expire_time)

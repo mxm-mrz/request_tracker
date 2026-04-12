@@ -7,7 +7,7 @@ from app.services.auth_service import AuthService
 from app.schemas.auth import LoginRequest
 from app.schemas.user import UserCreate, UserRead
 from app.models.user import User
-from app.security import get_current_user
+from app.security import get_current_user, oauth2_scheme
 from app.services.rate_limit import RateLimitService
 
 
@@ -30,6 +30,13 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db
     request_data = LoginRequest(
         login=form_data.username, password=form_data.password)
     return auth_service.login(request_data)
+
+
+@router.post('/logout', status_code=status.HTTP_200_OK)
+def logout(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    auth_service = AuthService(db)
+    auth_service.logout(token)
+    return {'message': 'Seccessfully logged out'}
 
 
 @router.post('/registration', status_code=status.HTTP_201_CREATED, response_model=UserRead)

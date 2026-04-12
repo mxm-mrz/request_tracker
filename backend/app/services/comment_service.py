@@ -8,6 +8,7 @@ from app.models.user import User, UserRole
 from app.models.comment import Comment
 from app.models.ticket import Ticket
 from app.services.comment_cache import CommentCacheService
+from app.services.event_publisher import EventPublisher
 
 
 class CommentService:
@@ -36,6 +37,9 @@ class CommentService:
         new_comment = self.comment_repository.create(
             ticket_id, comment_data, current_user.id)
         self.cache.delete_comments(ticket_id)
+        event_publisher = EventPublisher()
+        event_publisher.publish_ticket_event(
+            "COMMENT_CREATED", ticket_id, current_user.id)
         return new_comment
 
     def get_comment_by_ticket(self, ticket_id: int, current_user: User) -> list[Comment]:
